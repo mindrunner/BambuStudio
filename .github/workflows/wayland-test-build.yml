@@ -1,0 +1,41 @@
+name: Wayland test AppImage
+
+# Builds the ubu24 AppImage from the linux-wayland-support branch and uploads
+# it to the matching wayland-test-<sha> pre-release. Lives on the wayland-ci
+# branch to keep the PR branch free of CI commits.
+on:
+  push:
+    branches: [wayland-ci]
+  workflow_dispatch: {}
+
+jobs:
+  appimage:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Free runner disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+                      /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          sudo docker image prune -af
+          df -h /
+
+      - uses: actions/checkout@v4
+        with:
+          ref: linux-wayland-support
+
+      - name: Build dependency image (ubu24)
+        run: ./DockerBuild.sh -d -v ubu24
+
+      - name: Build AppImage (ubu24)
+        run: ./DockerBuild.sh -i -v ubu24
+
+      - name: Upload AppImage to pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          SHA=$(git rev-parse --short=9 HEAD)
+          ASSET="BambuStudio_wayland-test_ubu24_${SHA}.AppImage"
+          mv build/BambuStudio_ubu24.AppImage "$ASSET"
+          gh release upload "wayland-test-${SHA}" "$ASSET" --clobber -R "$GITHUB_REPOSITORY"
